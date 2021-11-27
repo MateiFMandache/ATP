@@ -4,8 +4,8 @@ about integers, e.g. 3 = 5 → false -/
 open tactic
 
 meta def no_confusion_false_prover : expr → tactic expr
--- First argumet: a hypothesis whose type is an equality
--- Second argument: Type of first argument
+-- Argumet: the neq statement we want to prove
+-- returns proof term
 | `(0 = nat.succ %%n → false) := to_expr ``(@nat.no_confusion false _ _)
 | `(nat.succ %%n = 0 → false) := to_expr ``(@nat.no_confusion false _ _)
 | `(nat.succ %%n₁ = nat.succ %%n₂ → false) :=
@@ -22,15 +22,19 @@ meta def no_confusion_false_prover : expr → tactic expr
 
 open nat
 
+-- 0 ≠ 1
 example : 0 = succ 0 → false :=
 by do target >>= no_confusion_false_prover >>= exact
 
+-- 2 ≠ 0
 example : succ (succ 0) = 0 → false :=
 by do target >>= no_confusion_false_prover >>= exact
 
+-- 1 ≠ 2
 example : succ 0 = succ (succ 0) → false :=
 by do target >>= no_confusion_false_prover >>= exact
 
+-- 3 ≠ 5
 example : succ (succ (succ 0)) =
 succ (succ (succ (succ (succ 0)))) → false :=
 by do target >>= no_confusion_false_prover >>= exact
