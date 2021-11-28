@@ -9,7 +9,14 @@ open expr
 meta def and_and_or : list expr → list expr → expr → tactic unit
 -- first argument is list of hypotheses yet to be processed
 -- second argument is target
-| (cons h t) (cons `(%%a ∨ %%b) u) e := sorry
+| (cons h t) (cons `(%%a ∨ %%b) u) e :=
+  seq'
+    (do ex ← to_expr ``(or.elim %%h),
+    apply ex >> skip)
+    (do nm ← get_unused_name `h,
+    h' ← intro nm,
+    tp ← infer_type h',
+    and_and_or (cons h' t) (cons tp u) e)
 | (cons h t) (cons `(%%a ∧ %%b) u) e :=
 do nm₁ ← get_unused_name `h,
   nm₂ ← get_unused_name `h,
@@ -45,4 +52,8 @@ example (P Q R : Prop) (h : Q ∧ R) : (P ∨ Q ∨ R) :=
 by main_tactic
 
 example (P Q R : Prop) (h : (P ∨ Q) ∧ (P ∨ R)) : (P ∨ Q ∧ R) :=
+by main_tactic
+
+example (P Q R : Prop) (h : (P ∨ Q) ∧ (P ∨ R) ∧ (Q ∨ R)) :
+  (P ∧ Q) ∨ (P ∧ R) ∨ (Q ∧ R) :=
 by main_tactic
