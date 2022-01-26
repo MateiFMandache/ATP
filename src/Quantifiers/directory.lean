@@ -58,7 +58,7 @@ meta def process_local : expr → directory → list expr → build_stack → ta
 do f ← to_expr ``(λ x : %%tp, %%rest),
   new_key ← new_mvar tp,
   edeps ← get_edeps tp,
-  let new_bs := (list.cons build_type.ass_ex bs.1, bs.2),
+  let new_bs := (list.cons (build_type.ass_ex, new_key) bs.1, bs.2),
   let new_dir := rbmap.insert dir new_key ⟨given, ldeps, edeps, new_bs⟩,
   recursion_expr ← whnf (app f new_key),
   process_local recursion_expr new_dir ldeps new_bs
@@ -66,14 +66,14 @@ do f ← to_expr ``(λ x : %%tp, %%rest),
 do f ← to_expr ``(λ x : %%tp, %%rest),
   new_key ← new_mvar tp,
   edeps ← get_edeps tp,
-  let new_bs := (list.cons build_type.ass_all bs.1, bs.2),
+  let new_bs := (list.cons (build_type.ass_all, new_key) bs.1, bs.2),
   let new_dir := rbmap.insert dir new_key ⟨choose, [], edeps, new_bs⟩,
   recursion_expr ← whnf (app f new_key),
   process_local recursion_expr new_dir (list.cons new_key ldeps) new_bs
 | single dir ldeps bs :=
 do new_key ← new_mvar single,
   edeps ← get_edeps single,
-  let new_bs := (list.cons build_type.ass_atom bs.1, bs.2),
+  let new_bs := (list.cons (build_type.ass_atom, new_key) bs.1, bs.2),
   return $ rbmap.insert dir new_key ⟨given, ldeps, edeps, new_bs⟩
 
 meta def process_goal : expr → goals → directory → list expr → build_stack → tactic (directory × goals)
@@ -86,7 +86,7 @@ meta def process_goal : expr → goals → directory → list expr → build_sta
 do f ← to_expr ``(λ x : %%tp, %%rest),
   new_key ← new_mvar tp,
   edeps ← get_edeps tp,
-  let new_bs := (list.cons build_type.goal_ex bs.1, bs.2),
+  let new_bs := (list.cons (build_type.goal_ex, new_key) bs.1, bs.2),
   let new_dir := rbmap.insert dir new_key ⟨choose, [], edeps, new_bs⟩,
   recursion_expr ← whnf (app f new_key),
   process_goal recursion_expr gls new_dir (list.cons new_key ldeps) new_bs
@@ -94,14 +94,14 @@ do f ← to_expr ``(λ x : %%tp, %%rest),
 do f ← to_expr ``(λ x : %%tp, %%rest),
   new_key ← new_mvar tp,
   edeps ← get_edeps tp,
-  let new_bs := (list.cons build_type.goal_all bs.1, bs.2),
+  let new_bs := (list.cons (build_type.goal_all, new_key) bs.1, bs.2),
   let new_dir := rbmap.insert dir new_key ⟨given, ldeps, edeps, new_bs⟩,
   recursion_expr ← whnf (app f new_key),
   process_goal recursion_expr (list.cons new_key gls) new_dir ldeps new_bs
 | single gls dir ldeps bs := 
 do new_key ← new_mvar single,
   edeps ← get_edeps single,
-  let new_bs := (list.cons build_type.goal_atom bs.1, bs.2),
+  let new_bs := (list.cons (build_type.goal_atom, new_key) bs.1, bs.2),
   return (rbmap.insert dir new_key ⟨choose, [], edeps, new_bs⟩, list.cons new_key gls)
 
 meta def create_directory : tactic (directory × goals) :=

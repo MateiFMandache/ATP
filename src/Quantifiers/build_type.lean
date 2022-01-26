@@ -6,7 +6,7 @@ inductive build_type : Type
 | goal_all : build_type -- for all in goal
 | goal_atom : build_type -- conclusion of goal
 
-meta def build_stack : Type := list build_type × expr
+meta def build_stack : Type := list (build_type × expr) × expr
 
 open build_type
 meta instance build_type_has_to_format : has_to_format build_type :=
@@ -21,4 +21,8 @@ instance inhabited_build_type : inhabited build_type :=
 ⟨goal_atom ⟩ 
 
 meta instance build_stack_has_to_tactic_format : has_to_tactic_format build_stack :=
-⟨λ s : build_stack, return (list.foldl (λ acc item, acc ++ ", " ++ item) ("[" ++ has_to_format.to_format s.1.head) (s.1.tail.map has_to_format.to_format) ++ "] " ++ has_to_format.to_format s.2)⟩
+⟨λ s : build_stack, return (list.foldl
+  (λ acc item, acc ++ ", " ++ item)
+  ("[" ++ has_to_format.to_format s.1.head.fst)
+  (s.1.tail.map (has_to_format.to_format ∘ prod.fst))
+++ "] " ++ has_to_format.to_format s.2)⟩
