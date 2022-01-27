@@ -32,12 +32,12 @@ match original, new with (eo, indexo), (en, indexn) :=
   let obsn := mi.build_stacks.nth (mi.build_stacks.length - 1 - indexn) in
   match obso, obsn with | some bso, some bsn :=
     let ino := bso.1.find_index (λ po, po.2 = eo) in
-    let inn := bso.1.find_index (λ pn, pn.2 = en) in
-    match mi.match_group.nth indexo with 
+    let inn := bsn.1.find_index (λ pn, pn.2 = en) in
+    match mi.match_group.nth (mi.build_stacks.length - 1 - indexo) with 
     | some omgs :=
       match omgs.nth ino with 
       | some omg :=
-        match mi.match_group.nth indexn with 
+        match mi.match_group.nth (mi.build_stacks.length - 1 - indexn) with 
         | some nmgs :=
           match nmgs.nth inn with 
           | some nmg :=
@@ -47,20 +47,20 @@ match original, new with (eo, indexo), (en, indexn) :=
               mi.build_stacks
               (mi.match_group.modify_nth
                 (λ nmgs, nmgs.modify_nth
-                  (λ _, omg) inn) indexn)
+                  (λ _, omg) inn) (mi.build_stacks.length - 1 - indexn))
               ((mi.reference_count.erase nmg).insert omg (rc + 1))
               mi.group_counter
-            | none := fail "error in add_to_match_group: key not found in reference_count"
+            | none := trace "error in add_to_match_group: key not found in reference_count" >> failed
             end
-          | none := fail "match_groups and build_stacks out of sync"
+          | none := trace inn >> trace "match_groups and build_stacks out of sync" >> failed
           end
-        | none := fail "match_groups and build_stacks out of sync"
+        | none := trace "match_groups and build_stacks out of sync" >> failed
         end
-      | none := fail "match_groups and build_stacks out of sync"
+      | none := trace "match_groups and build_stacks out of sync" >> failed
       end
-    | none := fail "match_groups and build_stacks out of sync"
+    | none := trace "match_groups and build_stacks out of sync" >> failed
     end
-  | _, _ := fail "error: expression index out of range"
+  | _, _ := trace "error: expression index out of range" >> failed
   end
 end
 
@@ -71,27 +71,116 @@ meta def match_expr : expr → expr → tactic unit
 | (const nm₁ _) (const nm₂ _)                     := guard (nm₁ = nm₂)
 | _ _                                             := failed
 
+meta def head_is (l: list expr) (e : expr) : bool :=
+match l with
+| (e' :: es) := if e' = e then tt else ff
+| [] := ff
+end
+
+meta def elaborate_match (dir : directory) (index : ℕ) (new_index : ℕ) :
+list expr → list expr → list expr → list (expr × ℕ) → list (expr × ℕ)
+→ list expr → match_info →
+tactic (list (expr × ℕ) × list (expr × ℕ) × match_info)
+-- first argument is ldeps of new component of current match
+-- second argument is edeps of new component of current match
+-- third argument is edeps of old component of current match
+-- fourth argument is new subgoals, in reverse order
+-- fifth argument is old subgoals
+-- sixth argument is list of expressions to be checked in the right order
+-- seventh argument is current match info
+-- first return value is new subgoals, in reverse order
+-- second return value is remaining old subgoals
+-- third return value is resulting match info
+| (ldep :: ldeps) nedeps oedeps new_subgoals old_subgoals (e :: es) mi :=
+if e ∈ nedeps then
+  match oedeps.nth (nedeps.index_of e) with
+  | some oedep :=
+  if e = ldep then
+    if (oedep, index) ∈ old_subgoals then
+      do new_mi ← add_to_match_group (oedep, index) (e, new_index) mi,
+      elaborate_match ldeps (nedeps.erase e) (oedeps.erase oedep)
+        ((ldep, new_index) :: new_subgoals)
+        (old_subgoals.erase (oedep, index)) es new_mi
+    else
+      do new_mi ← add_to_match_group (oedep, index) (e, new_index) mi,
+      elaborate_match ldeps (nedeps.erase e) (oedeps.erase oedep)
+        new_subgoals old_subgoals es new_mi
+  else
+    if (oedep, index) ∈ old_subgoals then
+      do new_mi ← add_to_match_group (oedep, index) (e, new_index) mi,
+      elaborate_match (ldep :: ldeps) (nedeps.erase e) (oedeps.erase oedep)
+        new_subgoals (old_subgoals.erase (oedep, index)) es new_mi
+    else
+      failed -- can't match given with given
+  | none := fail "oedeps and nedeps out of sync"
+  end
+else
+  if e = ldep then
+    elaborate_match ldeps nedeps oedeps
+      ((ldep, new_index) :: new_subgoals) old_subgoals es mi
+  else
+    elaborate_match (ldep :: ldeps) nedeps oedeps
+      new_subgoals old_subgoals es mi
+| [] (nedep :: nedeps) (oedep :: oedeps) new_subgoals old_subgoals (e :: es) mi :=
+if e ∈ nedeps then
+  match oedeps.nth (nedeps.index_of e) with
+  | some oedep :=
+    if (oedep, index) ∈ old_subgoals then
+      do new_mi ← add_to_match_group (oedep, index) (e, new_index) mi,
+      elaborate_match [] (nedeps.erase e) (oedeps.erase oedep)
+        new_subgoals (old_subgoals.erase (oedep, index)) es new_mi
+    else
+      failed -- can't match given with given
+  | none := fail "oedeps and nedeps out of sync"
+  end
+else
+  elaborate_match [] nedeps oedeps
+    new_subgoals old_subgoals es mi
+| ldeps (nedep :: nedeps) [] new_subgoals old_subgoals es mi :=
+  fail "Error in elaborate_match: unequal numbers of edeps"
+| ldeps [] (oedep :: oedeps) new_subgoals old_subgoals es mi :=
+  fail "Error in elaborate_match: unequal numbers of edeps"
+| (ldep :: ldeps) [] [] new_subgoals old_subgoals es mi :=
+  elaborate_match ldeps [] [] ((ldep, new_index) :: new_subgoals) old_subgoals es mi
+| [] [] [] new_subgoals old_subgoals es mi := return (new_subgoals, old_subgoals, mi)
+| _ _ _ new_subgoals old_subgoals [] mi :=
+  fail "Error in elaborate_match: ran out of expressions to check too soon"
 
 meta def mk_match_info (dir : directory) : list (expr × ℕ) → match_info → tactic match_info
 -- first argument is list of subgoals with the index of the build stack
 -- they appear in. Index is offset from end (not head).
 -- second argument is match_info built so far
-| [] m := return m
-| ((subgoal, index) :: tail) m :=
+| [] mi := return mi
+| ((subgoal, index) :: tail) mi :=
 first (dir.to_list.map (λ key_and_entry,
   match key_and_entry with (key, e) :=
   do tpsg ← infer_type subgoal,
     tpkey ← infer_type key,
     match_expr tpsg tpkey,
-    sorry
+    guard (e.side = side.given),
+    let new_index := mi.build_stacks.length,
+    let mi₁ := add_build_stack e.build_stack mi,
+    mi₂ ← add_to_match_group (subgoal, index) (key, new_index) mi₁,
+    oedeps ← get_edeps dir subgoal,
+    nbs ← get_build_stack dir key,
+    (new_sgs, old_sgs, mi₃) ← elaborate_match dir index new_index e.ldeps e.edeps oedeps [] tail
+      (nbs.1.map (λ b, b.2)) mi₂,
+    mk_match_info (list.reverse new_sgs ++ old_sgs) mi₃
   end)) <|> fail "no match found"
 
-meta def initial_match_info (dir : directory) (gls : goals) : tactic (list (expr × ℕ) × match_info) :=
+meta def initial_match_info (dir : directory) (gls : goals) :
+tactic (list (expr × ℕ) × match_info) :=
 match (dir.find gls.head) with
   | some e :=
     return (gls.map (λ g, (g, 0)), add_build_stack (e.build_stack) empty_match_info)
-  | none := fail "no entry found for first goal" end
+  | none := fail "no entry found for first goal"
+end
 
 meta def create_match_info (dir : directory) (gls : goals) : tactic match_info :=
 do (gs, mi) ← initial_match_info dir gls,
   mk_match_info dir gs mi
+
+meta def trace_match_info (mi : match_info) : tactic unit :=
+trace mi.build_stacks >>
+trace mi.match_group >>
+trace mi.reference_count.to_list
