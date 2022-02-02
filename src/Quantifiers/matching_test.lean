@@ -15,7 +15,6 @@ by do (dir, goals) ← create_directory,
 example {α : Type u} (P : α → Prop) (Q : α → Prop) (h₁ : ∃ x, P x)
 (h₂ : ∀ x, P x → Q x) : ∃ x, Q x :=
 by do (dir, goals) ← create_directory,
-  trace_directory dir,
   mi ← create_match_info dir goals,
   trace_match_info mi, -- the important line
 

@@ -64,12 +64,14 @@ match original, new with (eo, indexo), (en, indexn) :=
   end
 end
 
-meta def match_expr : expr → expr → tactic unit
-| (app a₁ b₁) (app a₂ b₂)                         := match_expr a₁ a₂ >> match_expr b₁ b₂
-| (mvar _ _ _) (mvar _ _ _)                       := return ()
-| (local_const nm₁ _ _ _) (local_const nm₂ _ _ _) := guard (nm₁ = nm₂)
-| (const nm₁ _) (const nm₂ _)                     := guard (nm₁ = nm₂)
-| _ _                                             := failed
+meta def match_expr (dir : directory) : expr → expr → tactic unit
+| (app a₁ b₁) (app a₂ b₂)           := match_expr a₁ a₂ >> match_expr b₁ b₂
+| (local_const nm₁ dispnm₁ bi₁ tp₁)
+  (local_const nm₂ dispnm₂ bi₂ tp₂) := guard (nm₁ = nm₂) <|>
+                                       guard (dir.contains (local_const nm₁ dispnm₁ bi₁ tp₁)) >>
+                                       guard (dir.contains (local_const nm₂ dispnm₂ bi₂ tp₂))
+| (const nm₁ _) (const nm₂ _)       := guard (nm₁ = nm₂)
+| _ _                               := failed
 
 meta def head_is (l: list expr) (e : expr) : bool :=
 match l with
@@ -112,7 +114,7 @@ if e ∈ nedeps then
         new_subgoals (old_subgoals.erase (oedep, index)) es new_mi
     else
       failed -- can't match given with given
-  | none := fail "oedeps and nedeps out of sync"
+  | none := trace "oedeps and nedeps out of sync" >> failed
   end
 else
   if e = ldep then
@@ -121,7 +123,7 @@ else
   else
     elaborate_match (ldep :: ldeps) nedeps oedeps
       new_subgoals old_subgoals es mi
-| [] (nedep :: nedeps) (oedep :: oedeps) new_subgoals old_subgoals (e :: es) mi :=
+| [] nedeps oedeps new_subgoals old_subgoals (e :: es) mi :=
 if e ∈ nedeps then
   match oedeps.nth (nedeps.index_of e) with
   | some oedep :=
@@ -156,7 +158,7 @@ first (dir.to_list.map (λ key_and_entry,
   match key_and_entry with (key, e) :=
   do tpsg ← infer_type subgoal,
     tpkey ← infer_type key,
-    match_expr tpsg tpkey,
+    match_expr dir tpsg tpkey,
     guard (e.side = side.given),
     let new_index := mi.build_stacks.length,
     let mi₁ := add_build_stack e.build_stack mi,
