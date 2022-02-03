@@ -52,7 +52,7 @@ match original, new with (eo, indexo), (en, indexn) :=
               mi.group_counter
             | none := trace "error in add_to_match_group: key not found in reference_count" >> failed
             end
-          | none := trace inn >> trace "match_groups and build_stacks out of sync" >> failed
+          | none := trace "match_groups and build_stacks out of sync" >> failed
           end
         | none := trace "match_groups and build_stacks out of sync" >> failed
         end
@@ -148,18 +148,23 @@ else
 | _ _ _ new_subgoals old_subgoals [] mi :=
   fail "Error in elaborate_match: ran out of expressions to check too soon"
 
-meta def mk_match_info (dir : directory) : list (expr × ℕ) → match_info → tactic match_info
+meta def mk_match_info (dir : directory) : list (expr × ℕ) → match_info → list expr →
+tactic match_info
 -- first argument is list of subgoals with the index of the build stack
 -- they appear in. Index is offset from end (not head).
 -- second argument is match_info built so far
-| [] mi := return mi
-| ((subgoal, index) :: tail) mi :=
+-- third argument is list of expressions to avoid matching with (avoid infinite loops)
+| [] mi no_looping := return mi
+| ((subgoal, index) :: tail) mi no_looping:=
 first (dir.to_list.map (λ key_and_entry,
   match key_and_entry with (key, e) :=
   do tpsg ← infer_type subgoal,
     tpkey ← infer_type key,
     match_expr dir tpsg tpkey,
     guard (e.side = side.given),
+    -- in-matching not currently supported, so do not match if entry is from goal
+    match e.build_stack with | ((build_type.goal_all, _) :: _, _) := failed | _ := skip end,
+    guard (key ∉ no_looping),
     let new_index := mi.build_stacks.length,
     let mi₁ := add_build_stack e.build_stack mi,
     mi₂ ← add_to_match_group (subgoal, index) (key, new_index) mi₁,
@@ -167,7 +172,7 @@ first (dir.to_list.map (λ key_and_entry,
     nbs ← get_build_stack dir key,
     (new_sgs, old_sgs, mi₃) ← elaborate_match dir index new_index e.ldeps e.edeps oedeps [] tail
       (nbs.1.map (λ b, b.2)) mi₂,
-    mk_match_info (list.reverse new_sgs ++ old_sgs) mi₃
+    mk_match_info (list.reverse new_sgs ++ old_sgs) mi₃ (key :: no_looping)
   end)) <|> fail "no match found"
 
 meta def initial_match_info (dir : directory) (gls : goals) :
@@ -180,7 +185,7 @@ end
 
 meta def create_match_info (dir : directory) (gls : goals) : tactic match_info :=
 do (gs, mi) ← initial_match_info dir gls,
-  mk_match_info dir gs mi
+  mk_match_info dir gs mi []
 
 meta def trace_match_info (mi : match_info) : tactic unit :=
 trace mi.build_stacks >>

@@ -2,35 +2,13 @@ import meta.expr
 import control.random
 import Quantifiers.build_type
 
-inductive side : Type
-| choose : side
-| given : side
-
-open side
-instance dec_side_eq : decidable_eq side :=
-begin
-  dunfold decidable_eq,
-  dunfold decidable_rel,
-  intros a b,
-  exact match a, b with
-    | choose, choose := is_true (eq.refl choose)
-    | choose, given := is_false (λ P, side.no_confusion P)
-    | given, choose := is_false (λ P, side.no_confusion P)
-    | given, given := is_true (eq.refl given)
-  end
-end
-
-meta instance side_has_to_tactic_format : has_to_tactic_format side :=
-⟨λ s : side, match s with | choose := return "choose"
-                          | given := return "given" end⟩ 
-
 meta structure entry : Type :=
 (side : side) -- Whether we can choose, or it is given to us
 (ldeps : list expr) -- logical dependancies, e.g. P → Q
 (edeps : list expr) -- expression dependancies, e.g. P x
 (build_stack : build_stack) -- data for use at build time
 
-open tactic expr native
+open tactic expr native side
 
 meta def directory := rb_map expr entry
 
