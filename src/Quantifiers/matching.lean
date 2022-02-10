@@ -188,7 +188,7 @@ first (dir.to_list.map (λ key_and_entry,
     nbs ← get_build_stack dir key,
     (new_sgs, old_sgs, mi₃) ← elaborate_match dir index new_index e.ldeps e.edeps oedeps [] tail
       (nbs.1.map (λ b, b.2)) mi₂,
-    onl ← old_no_looping old_sgs tail no_looping,
+    onl ← old_no_looping old_sgs tail no_looping.tail,
     mk_match_info (list.reverse new_sgs ++ old_sgs) mi₃
     (new_sgs.map (λ _, key :: no_looping.head) ++ onl)
   end)) <|> fail "no match found"
